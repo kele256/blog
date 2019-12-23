@@ -93,4 +93,32 @@ Date d(Month::mar(), Day(30), Year(1995));
 
 你的type生存与其他很多types之间，因而彼此该有转换行为吗？如果你希望允许类型T1之物被隐士转换为类型T2之物，就必须在class T1内写一个类型转换函数（operator T2）或在class T2内写一个non-explicit-one-argument（可被单一实参调用）的构造函数。如果你只允许explicit构造函数存在，就得专门写出负责执行转换的函数，且不得为类型转换操作符或non-explicit-one-argument构造函数（条款15有隐式和显式转换函数的范例）
 
+- 什么样的操作符和函数对此新type而言是合理的？
+
+这个问题的答案决定将为你的class声明哪些函数。其中某些该是member函数，某些则否
+
+- 什么样的标准函数应该驳回？
+
+那些正是你必须声明为private者
+
+- 谁该取用新type的成员？
+
+这个提问可以帮你决定哪个成员为public，哪个为protected，哪个为private。它也帮助你决定哪一个classes或functions应该是friends，以及将他们嵌套于另一个之内是否合理。
+
+- 什么是新type的”未声明“接口？
+
+它对效率、异常安全性（见条款29）以及资源运用（例如多任务锁定和动态内存）提供何种保证？你在这些方面提供的保证将为你的class实现代码加上相应的约束条件。
+
+- 你的新type有多么一般化？
+
+或许你其实并非定义一个新type，而是定义一整个types家族，果真如此你就不该定义一个新class，而是应该定义一个新的class template。
+
+- 你真的需要一个新type吗？
+
+如果只是定义新的derived class以便为既有的class添加机能，那么说不定单纯定义一或多个non-member函数或templates，能够达到目标。
+
+> - Class的设计就是type的设计。在定义一个新的type之前，请确定你已经考虑过本条款的所有讨论主题。
+
+##### 20. 宁以pass-by-reference-to-const 替换pass-by-value
+
 
