@@ -1,6 +1,6 @@
 ---
 title: Effective-C-改善程序与设计的55个具体做法(All)
-date: 2019-12-17 20:42:37
+date: 2019-12-20 20:42:37
 tags:
 - Effective C++
 categories:
@@ -28,3 +28,6 @@ categories:
 17. 以独立语句将newed对象置入智能指针
 18. 让接口容易被正确使用，不易被误用
 19. 设计class犹如设计type
+20. 宁以pass-by-reference-to-const 替换pass-by-value
+21. 必须返回对象时，别妄想返回其reference
+22. 将成员变量声明为private
