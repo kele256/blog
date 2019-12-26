@@ -275,4 +275,130 @@ inline const Rational operator* (const Rational& lhs, const Rational& rhs) {
 
 ##### 22.将成员变量声明为private
 
+首先从语法一致性说起（条款18）。如果成员变量不是public，客户唯一能够访问对象的办法就是通过成员函数。如果public接口内的每样东西都是函数，客户就不需要在打算访问class成员时试着记住是否该使用小括号。
 
+使用函数可以让你对成员变量的处理有更精确的控制。使用函数可以实现出“不准访问”，“只读访问”以及“读写访问”。如果通过函数访问成员变量，日后可改以某个计算替换这个成员变量，而class客户一点也不会知道class的内部实现已经起了变化。
+
+将成员变量隐藏在函数接口的背后，可以为“所有可能的实现”提供弹性。
+
+> - 切记将成员变量声明为private。这可以赋予客户访问数据的一致性，可细微划分访问控制、允诺约束条件获得保证，并提供class作者以充分的实现弹性。
+> - protected并不比public更具封装性。从封装的角度来说，其实只有两种访问权限：private（提供封装）和其他（不提供封装）
+
+##### 23. 宁以non-member、non-friend替换成员函数
+
+加入有个class用来表示网页浏览器。这样的class可能提供的众多的函数中，有一些用来清除下载元素告诉缓存区、清除访问过的URLs的历史记录、以及移除系统中的所有cookies。
+
+```C++
+class WebBrowser {
+public:
+    ...
+    void clearCache();
+    void clearHistory();
+    void removeCookies();
+};
+```
+
+许多用户会想一整个执行所有这些动作，因此WebBrowser也提供这样一个函数：
+
+```C++
+class WebBrowser {
+public:
+    ...
+    void clearEveryThing();
+};
+```
+
+当然，这一机能也可由一个non-member函数调用适当的member函数而提供出来：
+
+```C++
+void clearBrowser(WebBrowser& wb) {
+    wb.clearCache();
+    wb.clearHistory();
+    wb.removeCookies();
+}
+```
+
+哪一个比较好呢？是clearEveryThing还是clearBrowser?
+
+面向对象守则要求,数据以及操作数据的那些函数应该被捆绑在一块，这意味着他建议member函数是较好的选择。不幸的是这个建议不正确。这事基于面向对象真实意义的一个误解。面向对象守则要求数据应该尽可能被封装，然而与直观相反地，member函数clearEveryThing带来的封装性比non-member函数clearBrowser低。此外，提供non-member函数可允许对WebBrowser相关机能有较大的包裹弹性，而那最终导致较低的编译相依度，增加WebBrowser的可延伸性。因此在许多方面non-member做法比member做法好。
+
+只因在意封装性而让函数称为class的non-member并不意味着它“不可以是另一个class的member"。例如我们可以令clearBrowser成为某个工具类的一个static member函数。只要它不是WebBrowser的一部分（或friend），就不会影响WebBrowser的private成员封装性。
+
+一个像WebBrowser这样的class可能拥有大量便利函数，某些与书签有关，某些与打印有关，还有一些与cookie的管理有关...，通常客户只对其中的某些感兴趣。分离他们的最直接做法就是将书签相关便利函数声明于一个头文件，将cookie相关便利函数声明于另外一个头文件。。。这样允许客户只对他们所用的那一小部分系统形成编译相依。
+
+> - 宁可拿non-member non-friend函数替换member函数。这样做可以增加封装性、包裹弹性和机能扩充性。
+
+##### 24. 若所有参数皆需类型转换，请为此采用non-member函数
+
+令class支持隐式类型转换通常是个糟糕的主意。当然这条规则有其例外，最常见的例外是在建立数值类型时。假设设计一个class用来表现有理数，允许整数隐式转换为有理数颇为合理。
+
+```C++
+class Rational {
+public:
+    Rational(int numberator = 0, int denominator = 1);
+    int numberator() const;
+    int denominator() const;
+private:
+    ...
+};
+```
+
+你想支持算术运算诸如加法、乘法等等，但是是采用member函数? non-member函数？或可能的话由non-member friend函数？
+
+首先member函数的写法：
+
+```C++
+class Rational {
+public:
+    ...
+    const Rational operator* (const Rational& rhs) const;
+};
+```
+
+这种写法使你能够将两个有理数相乘：
+
+```C++
+Rational oneEight(1, 8);
+Rational oneHalf(1, 2);
+Rational result = oneEight * oneHalf; // OK
+result = result * oneEight; // OK
+```
+
+然而当进行混合式运算，会发现只有一半行得通：
+
+```C++
+result = oneHalf * 2; // OK
+result = 2 * oneHalf; // ERROR
+```
+
+以函数形式重写上述两个式子：
+
+```C++
+result = oneHalf.operator*(2); // OK
+result = 2.operator*(oneHalf); // ERROR!
+```
+
+oneHalf是一个内含operator* 函数的class的对象，所以编译器调用该函数，然而整数2并没有相应的class，也就没有operator* 成员函数。
+
+注意上述调用成功的那个2，发生了隐式类型转换，编译器知道正在传递一个int，而函数需要的是Rational；但他知道只要调用Rational构造函数并赋予所提供的int，就可以变出一个适当的Rational来。如果构造函数指定explicit，则上述两个都将编译失败。
+
+只有当参数被列于参数列内，这个参数才是隐式类型转换的合格参与者。
+
+想要支持混合式算术运算，可行的方法是：让operator* 成为一个non-member函数。
+
+```C++
+const Rational operator*(const Rational& rhs, const Rational& lhs) {
+    return Rational(lhs.numberator() * rhs.numberator(), lhs.denominator() * rhs.denominator());
+}
+
+Rational oneFourth(1, 4);
+Rational result;
+result = oneFourth * 2; // OK
+result = 2 * oneFourth; // OK
+```
+
+不适用friend的原因是：无论何时如果可以避免friend函数就该避免。
+
+> - 如果你需要为某个函数的所有参数（包括被this指针所指的那个隐喻参数）进行类型转换，那么这个函数必须是个non-member。
+
+##### 25. 考虑写出一个不抛异常的swap函数
