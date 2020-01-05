@@ -402,3 +402,308 @@ result = 2 * oneFourth; // OK
 > - 如果你需要为某个函数的所有参数（包括被this指针所指的那个隐喻参数）进行类型转换，那么这个函数必须是个non-member。
 
 ##### 25. 考虑写出一个不抛异常的swap函数
+
+所谓swap两对象值，意思是将两对象的值彼此赋予对方。默认情况下swap动作可由标准程序库提供的swap算法完成。其典型的实现：
+
+```C++
+namespace std {
+    template<typename T>
+    void swap(T& a, T& b) { // 类型T支持copy(copy 构造函数和 copy assignment)
+        T temp(a);
+        a = b;
+        b = temp;
+    }
+}
+```
+
+这个默认的swap实现版本十分平淡，涉及到了三个对象的复制。但是对某些类型而言，这些复制动作无一必要。
+
+其中最主要的就是“以指针指向一个对象，内含真正数据”那种类型。这种设计的常见表现形式是所谓“pimpl手法”。如果以这种手法设计Widget class，看起来就会像这样：
+
+```C++
+class WidgetImpl {
+public:
+    ...
+private:
+    int a, b, c; // 可能有许多数据，意味着复制时间很长
+    std::vector<double> v;
+};
+
+class Widget { // 这个class使用pimpl手法
+public:
+    Widget(const Widget& rhs);
+    Widget& operator=(const Widget& rhs) {
+        ...
+        *pImpl = *(rhs.pImpl); // operator=的一般性实现细节，参照条款10，11，12
+        ...
+    }
+    ...
+private:
+    WidgetImpl* pImpl; // 指针，所指对象内含Widget数据
+};
+```
+
+一旦要置换两个Widget对象值，我们唯一需要做的就是置换其pImpl指针，但是默认的swap算法并不知道这一点。
+
+我们希望能够告诉std::swap；当Widgets被置换时真正该做的是置换其内部的pImpl指针。下面是基本构想：
+
+```C++
+namespace std {
+    template<>
+    void swap<Widget> (Widget& a, Widget& b) {
+        swap(a.pImpl, b.pImpl); // 目前还不能编译过
+    }
+}
+```
+
+这个函数一开始的“template<>"表示它是std::swap的一个全特化版本，函数名称之后的”\<Widget>"表示这一特化版本是针对“T是Widget"而设计。通常我们不能改变std命名空间内的任何东西，但可以为标准templates（如swap）制造特化版本，使它专属于我们自己的classes。以上作为正是如此。
+
+```C++
+class Widget { // 与前相同，唯一区别是增加swap函数
+public:
+    ...
+    void swap(Widget& other) {
+        using std::swap; // 这个声明之所以必要，稍后解释
+        swap(pImpl, other.pImpl); // 若要置换Widgets就置换其pImpl指针
+    }
+    ...
+};
+
+namespace std {
+    template<>
+    void swap<Widget>(Widget& a, Widget& b) {
+        a.swap(b); // 若要置换Widgets,调用其swap成员函数
+    }
+}
+```
+
+这种做法不仅能够通过编译，还与STL容器有一致性，因为所有STL容器也都提供有public swap成员函数和std::swap特化版本（用以调用前者）。
+
+```C++
+#include<iostream>
+#include<vector>
+
+using namespace std;
+
+class WidgetImpl {
+public:
+    WidgetImpl()
+    : a(0)
+    , b(0)
+    , c(0)
+    {
+
+    }
+
+    WidgetImpl(int _a, int _b, int _c)
+    : a(_a)
+    , b(_b)
+    , c(_c)
+    {
+
+    }
+
+    WidgetImpl(WidgetImpl& rhs) {
+        a = rhs.a;
+        b = rhs.b;
+        c = rhs.c;
+
+        for (std::vector<double>::iterator iter = rhs.v.begin(); iter != rhs.v.end(); ++iter) {
+            v.push_back(*iter);
+        }
+    }
+
+    void addVec(double w) {
+        v.push_back(w);
+    }
+
+    void printImpl() {
+        cout << "a: " << a << endl;
+        cout << "b: " << b << endl;
+        cout << "c: " << c << endl;
+
+        for (std::vector<double>::iterator iter = v.begin(); iter != v.end(); ++iter) {
+            cout << *iter << endl; 
+        }
+    }
+
+    WidgetImpl& operator=(WidgetImpl& rhs) {
+        a = rhs.a;
+        b = rhs.b;
+        c = rhs.c;
+
+        for (std::vector<double>::iterator iter = rhs.v.begin(); iter != rhs.v.end(); ++iter) {
+            v.push_back(*iter);
+        }
+        return *this;
+    }
+
+    ~WidgetImpl() {
+
+    }
+
+private:
+    int a, b, c;
+    std::vector<double> v;
+};
+
+class Widget {
+public:
+    Widget(WidgetImpl* rhs)
+    : pImpl(rhs)
+    {
+
+    }
+
+    Widget(const Widget& rhs) {
+        pImpl = rhs.pImpl;
+    }
+
+    void swap(Widget& other) {
+        using std::swap;
+        swap(pImpl, other.pImpl);
+    }
+
+    void printWidget() {
+        pImpl->printImpl();
+    }
+
+    Widget& operator=(const Widget& rhs) {
+        WidgetImpl* pOrig = pImpl;
+        pImpl = new WidgetImpl(*rhs.pImpl);
+        delete pOrig;
+        return *this;
+    }
+
+private:
+    WidgetImpl* pImpl;
+};
+
+namespace std {
+    template<>
+    void swap<Widget>(Widget& a, Widget& b) {
+        a.swap(b);
+    }
+}
+
+int main()
+{
+    WidgetImpl tmp(1, 2, 3);
+    tmp.addVec(2.1);
+    tmp.printImpl();
+
+    WidgetImpl tmp1(4, 5, 6);
+    tmp1.addVec(2.2);
+    tmp1.printImpl();
+
+    Widget tmp2(&tmp);
+    tmp2.printWidget();
+
+    Widget tmp3(&tmp1);
+    tmp3.printWidget();
+
+    swap(tmp2, tmp3);
+
+    cout << "After swap" << endl;
+    tmp2.printWidget();
+    tmp3.printWidget();
+
+    return 0;
+}
+```
+
+然而假设Widget和WidgetImpl都是class template而非classes，也许可以试试将WidgetImpl内的数据类型加以参数化：
+
+```C++
+template<typename T>
+class WidgetImpl {...};
+
+template<typename T>
+class Widget {...};
+```
+
+在Widget内放个swap成员函数跟以往一样。但是我们却在特化std::swap时遇上乱流：
+
+```C++
+namespace std {
+    template<typename T>
+    void swap< Widget<T> >(Widget<T>& a, Widget<T>& b) { // 错误，不合法！
+        a.swap(b);
+    }
+}
+```
+
+我们企图偏特化（partially specialize)一个function template（std::swap)，但C++只允许对class templates偏特化，在function template身上偏特化是行不通的。
+
+当打算偏特化一个function template时，惯常做法是简单地为它添加一个重载版本，像这样：
+
+```C++
+namespace std {
+    template<typename T>
+    void swap(Widget<T>& a, Widget<T>& b) { // std::swap的重载版本，也不合法
+        a.swap(b);
+    }
+}
+```
+
+一般而言，重载function templates没有问题，但std是个特殊的命名空间，其管理规则也比较特殊。客户可以全特化std内的template，但是不可以添加新的templates（或classes或functions）到std里头。std的内容完全由C++标准委员会决定。
+
+我们还是声明一个non-member swap让它调用member swap，但不再将那个non-member swap声明为std::swap的特化版本或重载版本。为求简化起见，假设Widget的所有相关机能都被置于命名空间WidgetStuff内，整个结果看起来便像这样：
+
+```C++
+namespace WidgetStuff {
+    ...
+    template<typename T>
+    class Widget {...}; // 同前，内含swap成员函数
+
+    ...
+    template<typename T>
+    void swap(Widget<T>& a, Widget<T>& b) { // WidgetStuff命名空间
+        a.swap(b);
+    }
+}
+```
+
+这个做法对classes和class templates都行得通，所以似乎我们应该在任何时候都使用它。但是有一个理由使你应该为class特化std::swap，所以如果你想要你的”class 专属版“swap在尽可能多的语境下被调用，需要在该class所在命名空间内写一个non-member版本以及一个std::swap特化版本。
+
+目前为止所写的每一样东西都和swap编写者有关。换位思考，从用户观点来看事情也有必要。假设你正在写一个function template，其内需要置换两个对象值：
+
+```C++
+template<typename T>
+void doSomething(T& obj1, T& obj2) {
+    ...
+    swap(obj1, obj2);
+    ...
+}
+```
+
+应该调用哪个swap？下面是你希望发生的事：
+
+```C++
+template<typename T>
+void doSomething(T& obj1, T& obj2) {
+    using std::swap; // 令std::swap在此函数调用
+    ...
+    swap(obj1, obj2); // 为T型对象调用最佳swap版本
+    ...
+}
+```
+
+一旦编译器看到对swap函数的调用，它们便查找适当的swap并调用之。C++的名称查找法则确保找到global作用域或T所在之命名空间内的任何T专属的swap。如果T是Widget并位于命名空间WidgetStuff内，编译器会使用”实参取决之查找规则“，没有T专属之swap存在，编译器就使用std内的swap，这得感谢using声明式让std::swap在函数内曝光。然而即便如此编译器还是比较喜欢std::swap的T专属特化版，而非一般化的那个template。
+
+因此，令适当的swap被调用是很容易的。需要小心的是，别为这一调用添加额外修饰符，因为那会影响C++挑选适当函数，假设你以如下方式调用swap：
+
+```C++
+std::swap(obj1, obj2); // 这是错误的swap调用方式
+```
+
+总结：如果swap默认实现版的效率不足，试着做以下事情：
+
+1. 提供一个public swap成员函数，让它高效地置换你的类型的两个对象值。
+2. 在你的class后template所在的命名空间内提供一个non-member swap，并令他调用上述swap成员函数。
+3. 如果你正编写一个class（而非class template），为你的class特化std::swap。并令它调用你的swap成员函数。
+
+> - 当std::swap对你的类型效率不高时，提供一个swap成员函数，并确定这个函数不抛出异常。
+> - 如果你提供一个member swap，也该提供一个non-member swap用来调用前者。对于classes（而非templates),也请特化std::swap。
+> - 调用swap时应针对std::swap使用using声明式，然后调用swap并且不带任何”命名空间资格修饰“。
+> - 为”用户定义类型“进行std template全特化是好的，但千万不要尝试在std内加入某些对std而言全新的东西。
