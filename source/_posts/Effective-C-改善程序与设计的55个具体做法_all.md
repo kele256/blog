@@ -1,6 +1,6 @@
 ---
 title: Effective-C-改善程序与设计的55个具体做法(All)
-date: 2019-12-20 20:42:37
+date: 2020-1-7 00:02:37
 tags:
 - Effective C++
 categories:
@@ -34,3 +34,4 @@ categories:
 23. 宁以non-member、non-friend替换member函数
 24. 若所有参数皆需类型转换，请为此采用non-member函数
 25. 考虑写出一个不抛异常的swap函数
+26. 尽可能延后变量定义式的出现时间
