@@ -245,3 +245,90 @@ for (VPW::iterator iter = winPtrs.beigin(); iter != winPtrs.end(); ++iter) {
 
 ##### 28. 避免返回handles指向对象内部成分
 
+References、指针和迭代器统统都是所谓的handles（用来取得某个对象）
+
+假设你的程序涉及矩形，每个矩形由其左上角和右下角表示。为了让一个Rectangle对象尽可能小，你可能会决定不把定义矩形的这些点存放在Rectangle对象内，而是放在一个辅助的struct内，再让Rectangle去指他：
+
+```C++
+class Point {
+public:
+    Point(int x, int y);
+    ...
+    void SetX(int newVal);
+    void SetY(int newVal);
+    ...
+};
+struct RectData {
+    Point ulhc;
+    Point lrhc;
+};
+class Rectangle {
+    ...
+private:
+    std::tr1::shared_ptr<RectData> pData;
+}
+```
+
+Rectangle的用户必须能够计算Rectangle的范围，所以这个class提供upperLeft函数和lowerRight函数。Point是用户自定义类型，所以返回reference：
+
+```C++
+class Rectangle {
+public:
+    ...
+    Point& upperLeft() const { return pData->ulhc; }
+    Point& lowerRight() const { return pData->lrhc; }
+    ...
+};
+```
+
+这样设计可以通过编译，但却是错误的。实际上他是自我矛盾的。一方面upperLeft和lowerRight被声明为const成员函数，因为它们的目的只是为了提供客户一个得知Rectangle相关坐标点的方法，而不是让客户修改Rectangle。另一方面两个函数都返回reference指向private内部函数，调用者于是可通过这些reference更改内部数据！例如：
+
+```C++
+Point coord1(0, 0);
+Point coord2(100, 100);
+const Rectangle rec(coord1, coord2);
+rec.upperLeft().setX(50);
+```
+
+调用者能够使用被返回的reference来更改成员。但是rec应该是不可变的
+
+这给我们两个教训：第一，成员变量的封装性最多只等于”返回其reference“的函数的访问级别。本例中的ulhc和lrhc虽然都被声明为private，但是他们实际上却是public。第二，如果const成员函数传出一个reference，后者所指数据与对象自身有关联，而它又被存储于对象之外，那么这个函数调用者可以修改那笔数据。
+
+通常我们认为，对象的”内容“就是指它的成员变量，但其实不被公开使用的成员函数（也就是被声明为protected或private者）也是对象”内容“的一部分。因此也应该留心不要返回他们的handles。
+
+我们在这些函数身上遭遇的两个问题可以轻松去除，只要对它们的返回类型加上const即可：
+
+```C++
+class Rectangle {
+public:
+    ...
+    const Point& upperLeft() const { return pData->ulhc; }
+    const Point& lowerRight() const { return pData->lrhc; }
+    ...
+};
+```
+
+但即使如此，upperLeft和lowerRight还是返回了”代表对象内部“的handles，有可能在其他场合带来问题。更明确的说，它可能导致dangling handles(空悬的handles)：这种handles所指东西（的所属对象）不复存在。这种”不复存在的对象“最常见的来源就是函数返回值。例如某个函数返回GUI对象的外框（bounding box),这个外框采用矩形形式：
+
+```C++
+class GUIObject { ... };
+const Rectangle
+boundingBox(const GUIObject& obj); // 以value方式返回一个矩形
+```
+
+现在，用户有可能这么使用这个函数：
+
+```C++
+GUIObject* pgo;
+...
+const Point* pUpperLeft = &(boundingBox(*pgo).upperLeft());
+```
+
+对boundingBox()的调用获得一个新的、暂时的Rectangle对象。这个对象没有名称，所以我们权且称为temp。随后upperLeft作用于temp身上，返回一个引用指向temp的内部成分。随后temp将被销毁，间接导致temp内的Points析构。最终导致pUpperLeft指向一个不再存在的对象。
+
+这并不意味着绝对不可以让成员函数返回handles，有时候必须那么做。例如operator[] 就允许你使用strings和vectors的个别元素，而这些operator[]s就是返回引用指向”容器内的数据“。那些数据会随着容器的销毁而销毁。尽管如此，这样的函数毕竟是例外，不是常态。
+
+> - 避免返回handles指向对象内部。遵守这个条款可以增加封装性，帮助const成员函数的行为像个const，并将发生dangling handles的可能性降至最低。
+
+##### 29. 为”异常安全“而努力是值得的
+
