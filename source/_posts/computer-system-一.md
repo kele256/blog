@@ -104,6 +104,8 @@ I/O设备是系统与外部世界的联系通道。每个I/O设备都通过一�
 
 每台计算机都有一个字长，指明指针数据的标称大小。虚拟地址是以这样的一个字来编码的，所以字长决定的最重要的系统参数就是虚拟地址空间的最大大小。
 
+大部分数据类型都编码为有符号数值，除非有前缀unsigned或对确定大小的数据类型使用了特定的无符号声明。数据类型char是一个例外。尽管大多数编译器和机器将他们视为有符号数，但C标准不保证这一点。
+
 #### 3. 寻址和字节顺序
 
 在几乎所有的机器上，多字节对象都被存储为连续的字节序列，对象的地址为所使用字节中最小的地址。
@@ -111,6 +113,63 @@ I/O设备是系统与外部世界的联系通道。每个I/O设备都通过一�
 - 大端法： 最高有效字节在最前面的方式
 
 - 小端法： 最低有效字节在最前面的方式
+
+需要注意大小端的几个场合：
+
+- 在不同类型的机器之间通过网络传送二进制数据时。
+
+- 检查机器级程序时，阅读表示整数数据的字节序列时字节顺序。
+
+- 当编写规避正常的类型系统的程序时。在C语言中可以通过强制类型转换（cast)或联合（union)来允许以一种数据类型引用一个对象，而这种数据类型与创建这个对象时定义的数据类型不同。
+
+``` C
+// 查看机器大小端代码
+#include <stdio.h>
+
+typedef unsigned char *byte_pointer;
+
+void show_bytes(byte_pointer start, size_t len) {
+    size_t i;
+    for (i = 0; i < len; ++i) {
+        printf(" %.2x", start[i]);
+    }
+    printf("\n");
+}
+
+void show_int(int x) {
+    show_bytes((byte_pointer)&x, sizeof(int));
+}
+
+void show_float(float x) {
+    show_bytes((byte_pointer)&x, sizeof(int));
+}
+
+void show_pointer(void *x) {
+    show_bytes((byte_pointer)&x, sizeof(void *));
+}
+
+void test_show_bytes(int val) {
+    int ival = val;
+    float fval = (float)ival;
+    int *pVal = &ival;
+    show_int(ival);
+    show_float(fval);
+    show_pointer(pVal);
+}
+
+int main() {
+    int ival = 12345;
+    // show_int(ival);
+    test_show_bytes(ival);
+    return 0;
+}
+```
+
+> 上述代码int和float在不同机器或操作系统结果是相同的，只是字节顺序不同。但是指针却是完全不同的。不同机器/操作系统配置使用不同的存储分配规则。
+
+#### 4. 表示字符串
+
+文本数据比二进制数据具有更强的平台独立性。
 
 #### 4. C语言中的移位运算
 
