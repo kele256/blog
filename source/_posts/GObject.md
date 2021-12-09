@@ -1,18 +1,6 @@
 # GObject
-GObject是一个程序库，可以帮助我们使用C语言编写面向对象程序。
+## 类结构体
+类似于C++中，属于类的部分，比如static成员函数、static成员变量等
+## 实例结构体
+类似于C++中，每个实例独有的内容，比如成员函数，成员变量等。
 
-``` C
-#include <glib-object.h>
-
-typedef struct _PMDListNode PMDlistNode;
-struct _PMDListNode
-{
-    PMDListNode *prev;
-    PMDListNode *next;
-    void* data;
-};
-
-typedef struct _PMDList PMDList;
-
-struct 
-```
