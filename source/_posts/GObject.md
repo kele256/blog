@@ -113,4 +113,4 @@ pm_dlist_init(PMDList* self)
 - 每次使用g_object_unref函数为对象解除引用时，对象的引用计数便会减1；
 - 在g_object_unref函数中，如果发现对象的引用计数为0，那么则调用对象的析构函数释放对象所占用的资源；
 
-GObject类及其子类对象不仅存在继承关系，还存在相互包含的关系，
+> 为了解决循环引用，将GObject类及其子类对象的析构过程分为dispose和finalize阶段。在dispose阶段，只解除对象A对其所有属性的引用，在finalize阶段释放对象
