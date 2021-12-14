@@ -103,3 +103,14 @@ pm_dlist_init(PMDList* self)
 - 在GObject子类的类结构体初始化函数中，为GObject子类安装属性
 
 前两个步骤，可以理解为GObject的两个虚函数的实现。
+
+## GObject子类对象的析构过程
+- dispose
+- finalize
+### GObject 引用计数与引用循环
+- 使用g_object_new函数进行对象实例化的时候，对象的引用计数为1；
+- 每次使用g_object_ref函数引用对象时，对象的引用计数便会增1；
+- 每次使用g_object_unref函数为对象解除引用时，对象的引用计数便会减1；
+- 在g_object_unref函数中，如果发现对象的引用计数为0，那么则调用对象的析构函数释放对象所占用的资源；
+
+GObject类及其子类对象不仅存在继承关系，还存在相互包含的关系，
